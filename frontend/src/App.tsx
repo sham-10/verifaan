@@ -1,5 +1,8 @@
+import { TestDesigner } from '@/components/TestDesigner/TestDesigner'
+import { demoPayLoginTest } from '@/fixtures/demoPayLogin'
+
 function App() {
-  return <div>Verifaan</div>
+  return <TestDesigner test={demoPayLoginTest} />
 }
 
 export default App

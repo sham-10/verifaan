@@ -12,8 +12,58 @@
   --font-mono: ui-monospace, Consolas, monospace;
 }
 
+/*
+ * shadcn/ui semantic tokens. shadcn's `init` errored before writing these,
+ * so Button (and any future shadcn primitive) rendered unstyled. Aliased to
+ * the DESIGN.md palette above rather than shadcn's default neutral/oklch
+ * theme, and the radius scale is kept to DESIGN.md's 2-4px range instead of
+ * shadcn's default ~10px.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+}
+
 :root {
   color-scheme: dark;
+
+  --background: var(--color-bg-panel);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-bg-surface);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-surface);
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--color-accent);
+  --primary-foreground: #f9fafb;
+  --secondary: var(--color-bg-surface);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: #23262e;
+  --muted-foreground: rgb(229 231 235 / 60%);
+  --destructive: var(--color-status-fail);
+  --destructive-foreground: #f9fafb;
+  --border: rgb(255 255 255 / 10%);
+  --input: #23262e;
+  --ring: var(--color-accent);
 }
 
 body {

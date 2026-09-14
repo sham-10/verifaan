@@ -30,4 +30,15 @@ describe('TestDesigner', () => {
     expect(items[4]).toHaveTextContent('verify')
     expect(items[4]).toHaveTextContent('#dashboard-heading')
   })
+
+  it('shows the four static action buttons in the Actions panel', () => {
+    render(<TestDesigner test={demoPayLoginTest} />)
+
+    const actionsPanel = screen.getByRole('region', { name: 'Actions' })
+
+    expect(within(actionsPanel).getByRole('button', { name: 'Navigate' })).toBeInTheDocument()
+    expect(within(actionsPanel).getByRole('button', { name: 'Input' })).toBeInTheDocument()
+    expect(within(actionsPanel).getByRole('button', { name: 'Click' })).toBeInTheDocument()
+    expect(within(actionsPanel).getByRole('button', { name: 'Verify' })).toBeInTheDocument()
+  })
 })
