@@ -1,8 +1,21 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
+import { chromium } from "playwright";
+import { executeTest } from "./execution/executeTest.js";
+import { runSteps } from "./execution/runSteps.js";
 
 const prisma = new PrismaClient();
+
+// Resolves as soon as the callback it's handed is invoked, letting a route
+// hand a value back to its caller before an async chain finishes.
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 const ALLOWED_STEP_ACTIONS = ["navigate", "input", "click", "verify"] as const;
 
@@ -146,6 +159,63 @@ export function buildServer() {
     });
 
     return serializeTest(updatedTest);
+  });
+
+  app.post<{ Params: { id: string } }>("/tests/:id/run", async (request, reply) => {
+    const { id } = request.params;
+
+    const test = await prisma.test.findUnique({
+      where: { id },
+      include: { steps: true },
+    });
+
+    if (!test) {
+      return reply.status(404).send();
+    }
+
+    const steps = test.steps
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((step) => ({
+        id: step.id,
+        action: step.action,
+        target: { type: step.targetType, value: step.targetValue },
+        value: step.value ?? undefined,
+      }));
+
+    const executionIdReady = createDeferred<string>();
+
+    void executeTest(
+      prisma,
+      id,
+      steps,
+      async (steps) => {
+        const browser = await chromium.launch();
+        try {
+          const page = await browser.newPage();
+          await runSteps(page, steps);
+        } finally {
+          await browser.close();
+        }
+      },
+      (executionId) => executionIdReady.resolve(executionId),
+    );
+
+    const executionId = await executionIdReady.promise;
+
+    return reply.status(202).send({ executionId });
+  });
+
+  app.get<{ Params: { id: string } }>("/executions/:id", async (request, reply) => {
+    const { id } = request.params;
+
+    const execution = await prisma.execution.findUnique({ where: { id } });
+
+    if (!execution) {
+      return reply.status(404).send();
+    }
+
+    return execution;
   });
 
   app.delete<{ Params: { id: string } }>("/tests/:id", async (request, reply) => {
