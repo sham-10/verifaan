@@ -82,4 +82,19 @@ describe("executeTest", () => {
     expect(executions[0]?.finishedAt).not.toBeNull();
     expect(executions[0]?.log).toMatch(/Element not found: #login-button/);
   });
+
+  it("strips ANSI escape codes from the error message before storing it in the log", async () => {
+    const test = await createTest();
+    const ansiMessage =
+      "page.goto: net::ERR_NAME_NOT_RESOLVED at https://demopay.test/login\nCall log:\n[2m  - navigating to \"https://demopay.test/login\", waiting until \"load\"[22m\n";
+    const runner = vi.fn().mockRejectedValue(new Error(ansiMessage));
+
+    const { executionId } = await executeTest(prisma, test.id, steps, runner);
+
+    const execution = await prisma.execution.findUnique({ where: { id: executionId } });
+    expect(execution?.log).not.toMatch(//);
+    expect(execution?.log).toBe(
+      'page.goto: net::ERR_NAME_NOT_RESOLVED at https://demopay.test/login\nCall log:\n  - navigating to "https://demopay.test/login", waiting until "load"\n',
+    );
+  });
 });

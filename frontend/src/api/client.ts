@@ -1,5 +1,13 @@
 import type { Step, Test } from '@/fixtures/demoPayLogin'
 
+export type ExecutionStatus = 'running' | 'pass' | 'fail'
+
+export interface Execution {
+  id: string
+  status: ExecutionStatus
+  log: string
+}
+
 function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 }
@@ -23,6 +31,22 @@ export async function updateTest(
   })
   if (!response.ok) {
     throw new Error(`Failed to update test ${id}: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function runTest(id: string): Promise<{ executionId: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/tests/${id}/run`, { method: 'POST' })
+  if (!response.ok) {
+    throw new Error(`Failed to run test ${id}: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function getExecution(id: string): Promise<Execution> {
+  const response = await fetch(`${getApiBaseUrl()}/executions/${id}`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch execution ${id}: ${response.status}`)
   }
   return response.json()
 }

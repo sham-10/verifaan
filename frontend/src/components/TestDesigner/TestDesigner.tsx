@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { getTest, updateTest } from '@/api/client'
+import { getExecution, getTest, runTest, updateTest } from '@/api/client'
+import type { ExecutionStatus } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import type { Step, StepAction } from '@/fixtures/demoPayLogin'
+
+const POLL_INTERVAL_MS = 500
 
 interface TestDesignerProps {
   testId: string
@@ -43,6 +46,9 @@ export function TestDesigner({ testId }: TestDesignerProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const saveSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [runStatus, setRunStatus] = useState<ExecutionStatus | 'idle'>('idle')
+  const [runLog, setRunLog] = useState('')
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const selectedStep = steps.find((step) => step.id === selectedStepId) ?? null
 
   useEffect(() => {
@@ -54,6 +60,10 @@ export function TestDesigner({ testId }: TestDesignerProps) {
 
   useEffect(() => {
     return () => clearTimeout(saveSuccessTimeoutRef.current)
+  }, [])
+
+  useEffect(() => {
+    return () => clearTimeout(pollTimeoutRef.current)
   }, [])
 
   async function handleSave() {
@@ -73,6 +83,37 @@ export function TestDesigner({ testId }: TestDesignerProps) {
       setSaveError(`Couldn't save the test: ${reason}. Try again.`)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  function pollExecution(executionId: string) {
+    getExecution(executionId)
+      .then((execution) => {
+        if (execution.status === 'running') {
+          pollTimeoutRef.current = setTimeout(() => pollExecution(executionId), POLL_INTERVAL_MS)
+          return
+        }
+        setRunStatus(execution.status)
+        setRunLog(execution.log)
+      })
+      .catch((error) => {
+        const reason = error instanceof Error ? error.message : String(error)
+        setRunStatus('fail')
+        setRunLog(reason)
+      })
+  }
+
+  async function handleRun() {
+    clearTimeout(pollTimeoutRef.current)
+    setRunStatus('running')
+    setRunLog('')
+    try {
+      const { executionId } = await runTest(testId)
+      pollExecution(executionId)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      setRunStatus('fail')
+      setRunLog(reason)
     }
   }
 
@@ -106,15 +147,42 @@ export function TestDesigner({ testId }: TestDesignerProps) {
       <section aria-label="Test Steps" className="overflow-y-auto p-3">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">Test Steps</h2>
-          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
-            Save test
-          </Button>
+          <div className="flex gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRun}
+              disabled={runStatus === 'running'}
+            >
+              Run test
+            </Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
+              Save test
+            </Button>
+          </div>
         </div>
         {saveSuccess && (
           <p className="mb-2 text-sm text-text-primary/70">Test saved</p>
         )}
         {saveError && (
           <p className="mb-2 text-sm text-text-primary">{saveError}</p>
+        )}
+        {runStatus === 'running' && (
+          <p className="mb-2 text-sm text-text-primary/70">Running</p>
+        )}
+        {runStatus === 'pass' && (
+          <p className="mb-2 text-sm font-medium text-status-pass">PASS</p>
+        )}
+        {runStatus === 'fail' && (
+          <div className="mb-2 flex flex-col gap-1">
+            <p className="text-sm font-medium text-status-fail">FAIL</p>
+            {runLog && (
+              <pre className="whitespace-pre-wrap font-mono text-xs text-text-primary/70">
+                {runLog}
+              </pre>
+            )}
+          </div>
         )}
         <ol className="flex flex-col gap-1">
           {steps.map((step, index) => {

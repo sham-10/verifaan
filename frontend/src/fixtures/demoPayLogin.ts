@@ -22,7 +22,7 @@ export const demoPayLoginTest: Test = {
     {
       id: 'step-1',
       action: 'navigate',
-      target: { type: 'url', value: 'https://demopay.test/login' },
+      target: { type: 'url', value: 'https://heshamben.com/paydemo/login.php' },
     },
     {
       id: 'step-2',
