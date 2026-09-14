@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg-panel: #0f1115;
+  --color-bg-surface: #1a1d23;
+  --color-text-primary: #e5e7eb;
+  --color-accent: #6366f1;
+  --color-status-pass: #22c55e;
+  --color-status-fail: #f43f5e;
+
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
