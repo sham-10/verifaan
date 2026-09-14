@@ -52,4 +52,38 @@ describe("GET /tests/:id", () => {
 
     await app.close();
   });
+
+  it("nests each step's target as { type, value }, per ADR-004 / the API Contract", async () => {
+    const project = await prisma.project.create({
+      data: { name: "Checkout flow", description: "Tests for checkout" },
+    });
+
+    const test = await prisma.test.create({
+      data: { name: "Add item to cart", projectId: project.id },
+    });
+
+    await prisma.step.create({
+      data: {
+        testId: test.id,
+        order: 1,
+        action: "click",
+        targetType: "css",
+        targetValue: "#add-to-cart",
+      },
+    });
+
+    const app = buildServer();
+    await app.ready();
+
+    const response = await supertest(app.server).get(`/tests/${test.id}`);
+
+    expect(response.body.steps[0].target).toEqual({
+      type: "css",
+      value: "#add-to-cart",
+    });
+    expect(response.body.steps[0].targetType).toBeUndefined();
+    expect(response.body.steps[0].targetValue).toBeUndefined();
+
+    await app.close();
+  });
 });

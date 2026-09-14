@@ -1,23 +1,33 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { getTest, updateTest } from '@/api/client'
 import { demoPayLoginTest } from '@/fixtures/demoPayLogin'
 import { TestDesigner } from './TestDesigner'
 
+vi.mock('@/api/client', () => ({
+  getTest: vi.fn(),
+  updateTest: vi.fn(),
+}))
+
 describe('TestDesigner', () => {
   it('renders the three-panel layout: Actions, Test Steps, Properties', () => {
-    render(<TestDesigner test={demoPayLoginTest} />)
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
 
     expect(screen.getByRole('region', { name: 'Actions' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Test Steps' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Properties' })).toBeInTheDocument()
   })
 
-  it('lists the hardcoded DemoPay login steps, in order, in the Test Steps panel', () => {
-    render(<TestDesigner test={demoPayLoginTest} />)
+  it('lists the fetched DemoPay login steps, in order, in the Test Steps panel', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    expect(getTest).toHaveBeenCalledWith(demoPayLoginTest.id)
 
     const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
-    const items = within(testStepsPanel).getAllByRole('listitem')
+    const items = await within(testStepsPanel).findAllByRole('listitem')
 
     expect(items).toHaveLength(5)
     expect(items[0]).toHaveTextContent('navigate')
@@ -33,7 +43,8 @@ describe('TestDesigner', () => {
   })
 
   it('shows the four static action buttons in the Actions panel', () => {
-    render(<TestDesigner test={demoPayLoginTest} />)
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
 
     const actionsPanel = screen.getByRole('region', { name: 'Actions' })
 
@@ -44,11 +55,12 @@ describe('TestDesigner', () => {
   })
 
   it('selects a step on click and shows its fields in the Properties panel', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
     const user = userEvent.setup()
-    render(<TestDesigner test={demoPayLoginTest} />)
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
 
     const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
-    const items = within(testStepsPanel).getAllByRole('listitem')
+    const items = await within(testStepsPanel).findAllByRole('listitem')
     const enterUsernameStep = items[1]
 
     await user.click(enterUsernameStep)
@@ -64,13 +76,13 @@ describe('TestDesigner', () => {
   })
 
   it('reorders steps: moving the last step to the first position', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
     const user = userEvent.setup()
-    render(<TestDesigner test={demoPayLoginTest} />)
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
 
     const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
-    const verifyStep = within(testStepsPanel)
-      .getAllByRole('listitem')
-      .find((item) => item.textContent?.includes('#dashboard-heading'))
+    const initialItems = await within(testStepsPanel).findAllByRole('listitem')
+    const verifyStep = initialItems.find((item) => item.textContent?.includes('#dashboard-heading'))
     if (!verifyStep) throw new Error('verify step not found')
 
     const moveUpButton = within(verifyStep).getByRole('button', { name: 'Move up' })
@@ -82,5 +94,82 @@ describe('TestDesigner', () => {
     const reorderedItems = within(testStepsPanel).getAllByRole('listitem')
     expect(reorderedItems[0]).toHaveTextContent('verify')
     expect(reorderedItems[0]).toHaveTextContent('#dashboard-heading')
+  })
+
+  it('saves the current step list via PUT /tests/:id when Save is clicked', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(updateTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    await within(testStepsPanel).findAllByRole('listitem')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(updateTest).toHaveBeenCalledWith(demoPayLoginTest.id, {
+      name: demoPayLoginTest.name,
+      steps: demoPayLoginTest.steps.map(({ action, target, value }) => ({
+        action,
+        target,
+        value,
+      })),
+    })
+  })
+
+  it('shows a success message when saving completes', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(updateTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    await within(testStepsPanel).findAllByRole('listitem')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(await screen.findByText('Test saved')).toBeInTheDocument()
+  })
+
+  it('shows an inline error message when saving fails', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(updateTest).mockRejectedValue(new Error('Failed to update test test-demo-pay-login: 500'))
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    await within(testStepsPanel).findAllByRole('listitem')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(
+      await screen.findByText("Couldn't save the test: Failed to update test test-demo-pay-login: 500. Try again."),
+    ).toBeInTheDocument()
+  })
+
+  it('disables Save while a save is in progress', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    let resolveUpdate!: (value: typeof demoPayLoginTest) => void
+    vi.mocked(updateTest).mockReturnValue(
+      new Promise((resolve) => {
+        resolveUpdate = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    await within(testStepsPanel).findAllByRole('listitem')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(saveButton).toBeDisabled()
+
+    resolveUpdate(demoPayLoginTest)
+    await waitFor(() => expect(saveButton).not.toBeDisabled())
   })
 })

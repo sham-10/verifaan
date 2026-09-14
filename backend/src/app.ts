@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -11,8 +12,33 @@ function hasOnlyValidStepActions(steps: Array<{ action: string }>): boolean {
   );
 }
 
+// The DB stores each step's target as flat targetType/targetValue columns,
+// but ADR-004 and the API Contract define the wire shape as a nested
+// target: { type, value } object, matching how the frontend (and Prisma's
+// own step-create payload) already model it. Reshape DB rows to that
+// documented shape before sending them out.
+function serializeStep(step: {
+  targetType: string;
+  targetValue: string;
+  [key: string]: unknown;
+}) {
+  const { targetType, targetValue, ...rest } = step;
+  return { ...rest, target: { type: targetType, value: targetValue } };
+}
+
+function serializeTest<T extends { steps: Array<Parameters<typeof serializeStep>[0]> }>(
+  test: T,
+) {
+  return { ...test, steps: test.steps.map(serializeStep) };
+}
+
 export function buildServer() {
   const app = Fastify();
+
+  app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  });
 
   app.get("/health", async () => {
     return { status: "ok" };
@@ -72,7 +98,7 @@ export function buildServer() {
       return reply.status(404).send();
     }
 
-    return test;
+    return serializeTest(test);
   });
 
   app.put<{
@@ -119,7 +145,7 @@ export function buildServer() {
       });
     });
 
-    return updatedTest;
+    return serializeTest(updatedTest);
   });
 
   app.delete<{ Params: { id: string } }>("/tests/:id", async (request, reply) => {

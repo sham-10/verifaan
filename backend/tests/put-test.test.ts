@@ -74,4 +74,38 @@ describe("PUT /tests/:id", () => {
 
     await app.close();
   });
+
+  it("returns steps with a nested target object, per ADR-004 / the API Contract", async () => {
+    const project = await prisma.project.create({
+      data: { name: "Checkout flow", description: "Tests for checkout" },
+    });
+
+    const test = await prisma.test.create({
+      data: { name: "Add item to cart", projectId: project.id },
+    });
+
+    const app = buildServer();
+    await app.ready();
+
+    const payload = {
+      name: "Add item to cart and checkout",
+      steps: [
+        {
+          action: "click",
+          target: { type: "css", value: "#checkout" },
+        },
+      ],
+    };
+
+    const response = await supertest(app.server).put(`/tests/${test.id}`).send(payload);
+
+    expect(response.body.steps[0].target).toEqual({
+      type: "css",
+      value: "#checkout",
+    });
+    expect(response.body.steps[0].targetType).toBeUndefined();
+    expect(response.body.steps[0].targetValue).toBeUndefined();
+
+    await app.close();
+  });
 });

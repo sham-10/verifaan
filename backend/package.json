@@ -7,19 +7,21 @@
   "scripts": {
     "pretest": "node scripts/reset-test-db.mjs",
     "test": "vitest run",
+    "seed": "node scripts/seed.mjs",
     "postinstall": "prisma skills sync || exit 0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
     "@prisma/client": "^6.19.3",
+    "dotenv": "^16.6.1",
     "fastify": "^5.12.3"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
     "@types/supertest": "^7.2.1",
-    "dotenv": "^16.6.1",
     "prisma": "^6.19.3",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",

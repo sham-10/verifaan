@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getTest, updateTest } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import type { Step, StepAction, Test } from '@/fixtures/demoPayLogin'
+import type { Step, StepAction } from '@/fixtures/demoPayLogin'
 
 interface TestDesignerProps {
-  test: Test
+  testId: string
 }
 
 const ACTIONS: { action: StepAction; label: string }[] = [
@@ -26,7 +27,7 @@ function PropertiesPanelContent({ step }: { step: Step }) {
       </div>
       {step.action === 'input' && (
         <div>
-          <div className="text-text-primary/50">Value Of</div>
+          <div className="text-text-primary/50">Value</div>
           <div className="font-mono">{step.value}</div>
         </div>
       )}
@@ -34,10 +35,46 @@ function PropertiesPanelContent({ step }: { step: Step }) {
   )
 }
 
-export function TestDesigner({ test }: TestDesignerProps) {
-  const [steps, setSteps] = useState<Step[]>(test.steps)
+export function TestDesigner({ testId }: TestDesignerProps) {
+  const [testName, setTestName] = useState('')
+  const [steps, setSteps] = useState<Step[]>([])
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const saveSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const selectedStep = steps.find((step) => step.id === selectedStepId) ?? null
+
+  useEffect(() => {
+    getTest(testId).then((test) => {
+      setTestName(test.name)
+      setSteps(test.steps)
+    })
+  }, [testId])
+
+  useEffect(() => {
+    return () => clearTimeout(saveSuccessTimeoutRef.current)
+  }, [])
+
+  async function handleSave() {
+    setIsSaving(true)
+    setSaveError(null)
+    setSaveSuccess(false)
+    clearTimeout(saveSuccessTimeoutRef.current)
+    try {
+      await updateTest(testId, {
+        name: testName,
+        steps: steps.map(({ action, target, value }) => ({ action, target, value })),
+      })
+      setSaveSuccess(true)
+      saveSuccessTimeoutRef.current = setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      setSaveError(`Couldn't save the test: ${reason}. Try again.`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   function moveStep(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
@@ -67,7 +104,18 @@ export function TestDesigner({ test }: TestDesignerProps) {
       </section>
 
       <section aria-label="Test Steps" className="overflow-y-auto p-3">
-        <h2 className="mb-2 text-sm font-medium">Test Steps</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Test Steps</h2>
+          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
+            Save test
+          </Button>
+        </div>
+        {saveSuccess && (
+          <p className="mb-2 text-sm text-text-primary/70">Test saved</p>
+        )}
+        {saveError && (
+          <p className="mb-2 text-sm text-text-primary">{saveError}</p>
+        )}
         <ol className="flex flex-col gap-1">
           {steps.map((step, index) => {
             const isSelected = step.id === selectedStepId
