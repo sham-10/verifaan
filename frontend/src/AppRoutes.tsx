@@ -1,4 +1,5 @@
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { AppShell } from '@/components/AppShell/AppShell'
 import { ProjectList } from '@/components/ProjectList/ProjectList'
 import { TestList } from '@/components/TestList/TestList'
 import { TestDesigner } from '@/components/TestDesigner/TestDesigner'
@@ -28,10 +29,12 @@ function TestDesignerRoute() {
 
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<ProjectListRoute />} />
-      <Route path="/projects/:id" element={<TestListRoute />} />
-      <Route path="/projects/:id/tests/:testId" element={<TestDesignerRoute />} />
-    </Routes>
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<ProjectListRoute />} />
+        <Route path="/projects/:id" element={<TestListRoute />} />
+        <Route path="/projects/:id/tests/:testId" element={<TestDesignerRoute />} />
+      </Routes>
+    </AppShell>
   )
 }
