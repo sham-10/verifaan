@@ -31,7 +31,7 @@ describe('TestDesigner', () => {
 
     expect(items).toHaveLength(5)
     expect(items[0]).toHaveTextContent('navigate')
-    expect(items[0]).toHaveTextContent('https://demopay.test/login')
+    expect(items[0]).toHaveTextContent('https://heshamben.com/paydemo/login.php')
     expect(items[1]).toHaveTextContent('input')
     expect(items[1]).toHaveTextContent('#username')
     expect(items[2]).toHaveTextContent('input')

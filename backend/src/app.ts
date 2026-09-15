@@ -99,6 +99,17 @@ export function buildServer() {
     return reply.status(201).send(test);
   });
 
+  app.get<{ Params: { id: string } }>("/projects/:id/tests", async (request, reply) => {
+    const { id } = request.params;
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      return reply.status(404).send();
+    }
+
+    return prisma.test.findMany({ where: { projectId: id } });
+  });
+
   app.get<{ Params: { id: string } }>("/tests/:id", async (request, reply) => {
     const { id } = request.params;
 

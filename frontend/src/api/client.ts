@@ -8,8 +8,35 @@ export interface Execution {
   log: string
 }
 
+export interface Project {
+  id: string
+  name: string
+  description: string | null
+}
+
+export interface TestSummary {
+  id: string
+  name: string
+}
+
 function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+}
+
+export async function getProjects(): Promise<Project[]> {
+  const response = await fetch(`${getApiBaseUrl()}/projects`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch projects: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function getProjectTests(projectId: string): Promise<TestSummary[]> {
+  const response = await fetch(`${getApiBaseUrl()}/projects/${projectId}/tests`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch tests for project ${projectId}: ${response.status}`)
+  }
+  return response.json()
 }
 
 export async function getTest(id: string): Promise<Test> {
