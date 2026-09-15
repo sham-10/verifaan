@@ -167,6 +167,97 @@ describe('TestDesigner', () => {
     })
   })
 
+  it('renders Target type as a select with exactly the url and locator options', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    await user.click(items[1])
+
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+    const targetTypeField = within(propertiesPanel).getByLabelText('Target type')
+
+    expect(targetTypeField.tagName).toBe('SELECT')
+    const optionLabels = within(targetTypeField as HTMLElement)
+      .getAllByRole('option')
+      .map((option) => (option as HTMLOptionElement).value)
+    expect(optionLabels).toEqual(['url', 'locator'])
+  })
+
+  it('pre-selects the current step\'s target type in the dropdown', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+
+    await user.click(items[0])
+    expect(within(propertiesPanel).getByLabelText('Target type')).toHaveValue('url')
+
+    await user.click(items[1])
+    expect(within(propertiesPanel).getByLabelText('Target type')).toHaveValue('locator')
+  })
+
+  it('deletes a step: it is removed and the remaining steps stay in order', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const enterUsernameStep = items[1]
+
+    const deleteButton = within(enterUsernameStep).getByRole('button', { name: 'Delete' })
+    await user.click(deleteButton)
+
+    const remainingItems = within(testStepsPanel).getAllByRole('listitem')
+    expect(remainingItems).toHaveLength(4)
+    expect(remainingItems[0]).toHaveTextContent('navigate')
+    expect(remainingItems[1]).toHaveTextContent('input')
+    expect(remainingItems[1]).toHaveTextContent('#password')
+    expect(remainingItems[2]).toHaveTextContent('click')
+    expect(remainingItems[3]).toHaveTextContent('verify')
+  })
+
+  it('clears the selection and Properties when the deleted step was selected', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const enterUsernameStep = items[1]
+
+    await user.click(enterUsernameStep)
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+    expect(within(propertiesPanel).getByLabelText('Target value')).toHaveValue('#username')
+
+    const deleteButton = within(enterUsernameStep).getByRole('button', { name: 'Delete' })
+    await user.click(deleteButton)
+
+    expect(within(propertiesPanel).queryByLabelText('Target value')).not.toBeInTheDocument()
+  })
+
+  it('does not select the step when clicking its delete control', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const clickStep = items[3]
+
+    const deleteButton = within(clickStep).getByRole('button', { name: 'Delete' })
+    await user.click(deleteButton)
+
+    const remainingItems = within(testStepsPanel).getAllByRole('listitem')
+    remainingItems.forEach((item) => expect(item).toHaveAttribute('aria-selected', 'false'))
+  })
+
   it('reorders steps: moving the last step to the first position', async () => {
     vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
     const user = userEvent.setup()

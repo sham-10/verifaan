@@ -52,13 +52,15 @@ function PropertiesPanelContent({
         <label htmlFor="step-target-type" className="text-text-primary/50">
           Target type
         </label>
-        <input
+        <select
           id="step-target-type"
-          type="text"
           value={step.target.type}
           onChange={(event) => onTargetTypeChange(event.target.value)}
           className={propertiesInputClassName}
-        />
+        >
+          <option value="url">url</option>
+          <option value="locator">locator</option>
+        </select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="step-target-value" className="text-text-primary/50">
@@ -179,6 +181,13 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     const step = createDefaultStep(action)
     setSteps((current) => [...current, step])
     setSelectedStepId(step.id)
+  }
+
+  function deleteStep(stepId: string) {
+    setSteps((current) => current.filter((step) => step.id !== stepId))
+    if (stepId === selectedStepId) {
+      setSelectedStepId(null)
+    }
   }
 
   function moveStep(index: number, direction: -1 | 1) {
@@ -302,6 +311,18 @@ export function TestDesigner({ testId }: TestDesignerProps) {
                     }}
                   >
                     ↓
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Delete"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      deleteStep(step.id)
+                    }}
+                  >
+                    ×
                   </Button>
                 </div>
               </li>
