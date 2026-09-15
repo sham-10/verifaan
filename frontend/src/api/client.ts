@@ -31,10 +31,40 @@ export async function getProjects(): Promise<Project[]> {
   return response.json()
 }
 
+export async function createProject(data: {
+  name: string
+  description?: string
+}): Promise<Project> {
+  const response = await fetch(`${getApiBaseUrl()}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to create project: ${response.status}`)
+  }
+  return response.json()
+}
+
 export async function getProjectTests(projectId: string): Promise<TestSummary[]> {
   const response = await fetch(`${getApiBaseUrl()}/projects/${projectId}/tests`)
   if (!response.ok) {
     throw new Error(`Failed to fetch tests for project ${projectId}: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function createTest(
+  projectId: string,
+  data: { name: string },
+): Promise<TestSummary> {
+  const response = await fetch(`${getApiBaseUrl()}/projects/${projectId}/tests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to create test for project ${projectId}: ${response.status}`)
   }
   return response.json()
 }
