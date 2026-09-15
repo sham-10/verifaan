@@ -17,21 +17,73 @@ const ACTIONS: { action: StepAction; label: string }[] = [
   { action: 'verify', label: 'Verify' },
 ]
 
-function PropertiesPanelContent({ step }: { step: Step }) {
+function createDefaultStep(action: StepAction): Step {
+  const target = action === 'navigate' ? { type: 'url', value: '' } : { type: 'locator', value: '' }
+  const step: Step = { id: crypto.randomUUID(), action, target }
+  if (action === 'input' || action === 'verify') {
+    step.value = ''
+  }
+  return step
+}
+
+const propertiesInputClassName =
+  'rounded-[3px] border border-white/10 bg-bg-panel px-2 py-1.5 font-mono text-sm text-text-primary focus-visible:border-accent focus-visible:outline-none'
+
+interface PropertiesPanelContentProps {
+  step: Step
+  onTargetTypeChange: (value: string) => void
+  onTargetValueChange: (value: string) => void
+  onValueChange: (value: string) => void
+}
+
+function PropertiesPanelContent({
+  step,
+  onTargetTypeChange,
+  onTargetValueChange,
+  onValueChange,
+}: PropertiesPanelContentProps) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div>
         <div className="text-text-primary/50">Action</div>
         <div className="font-medium">{step.action}</div>
       </div>
-      <div>
-        <div className="text-text-primary/50">Target</div>
-        <div className="font-mono">{step.target.value}</div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="step-target-type" className="text-text-primary/50">
+          Target type
+        </label>
+        <input
+          id="step-target-type"
+          type="text"
+          value={step.target.type}
+          onChange={(event) => onTargetTypeChange(event.target.value)}
+          className={propertiesInputClassName}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="step-target-value" className="text-text-primary/50">
+          Target value
+        </label>
+        <input
+          id="step-target-value"
+          type="text"
+          value={step.target.value}
+          onChange={(event) => onTargetValueChange(event.target.value)}
+          className={propertiesInputClassName}
+        />
       </div>
       {step.action === 'input' && (
-        <div>
-          <div className="text-text-primary/50">Value</div>
-          <div className="font-mono">{step.value}</div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="step-value" className="text-text-primary/50">
+            Value
+          </label>
+          <input
+            id="step-value"
+            type="text"
+            value={step.value ?? ''}
+            onChange={(event) => onValueChange(event.target.value)}
+            className={propertiesInputClassName}
+          />
         </div>
       )}
     </div>
@@ -117,6 +169,18 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     }
   }
 
+  function updateSelectedStep(updates: Partial<Step>) {
+    setSteps((current) =>
+      current.map((step) => (step.id === selectedStepId ? { ...step, ...updates } : step)),
+    )
+  }
+
+  function handleAddStep(action: StepAction) {
+    const step = createDefaultStep(action)
+    setSteps((current) => [...current, step])
+    setSelectedStepId(step.id)
+  }
+
   function moveStep(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= steps.length) return
@@ -137,7 +201,14 @@ export function TestDesigner({ testId }: TestDesignerProps) {
         <h2 className="mb-2 text-sm font-medium">Actions</h2>
         <div className="flex flex-col gap-1">
           {ACTIONS.map(({ action, label }) => (
-            <Button key={action} type="button" variant="outline" size="sm" className="justify-start">
+            <Button
+              key={action}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="justify-start"
+              onClick={() => handleAddStep(action)}
+            >
               {label}
             </Button>
           ))}
@@ -244,7 +315,18 @@ export function TestDesigner({ testId }: TestDesignerProps) {
         className="border-l border-white/10 bg-bg-surface p-3"
       >
         <h2 className="mb-2 text-sm font-medium">Properties</h2>
-        {selectedStep && <PropertiesPanelContent step={selectedStep} />}
+        {selectedStep && (
+          <PropertiesPanelContent
+            step={selectedStep}
+            onTargetTypeChange={(value) =>
+              updateSelectedStep({ target: { ...selectedStep.target, type: value } })
+            }
+            onTargetValueChange={(value) =>
+              updateSelectedStep({ target: { ...selectedStep.target, value } })
+            }
+            onValueChange={(value) => updateSelectedStep({ value })}
+          />
+        )}
       </section>
     </div>
   )

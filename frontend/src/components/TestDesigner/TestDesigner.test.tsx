@@ -72,7 +72,99 @@ describe('TestDesigner', () => {
 
     const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
     expect(propertiesPanel).toHaveTextContent('input')
-    expect(propertiesPanel).toHaveTextContent('#username')
+    expect(within(propertiesPanel).getByLabelText('Target value')).toHaveValue('#username')
+  })
+
+  it("clicking 'Click' adds a step with action 'click' to the list and it becomes the selected step", async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const initialItems = await within(testStepsPanel).findAllByRole('listitem')
+    expect(initialItems).toHaveLength(5)
+
+    const actionsPanel = screen.getByRole('region', { name: 'Actions' })
+    await user.click(within(actionsPanel).getByRole('button', { name: 'Click' }))
+
+    const items = within(testStepsPanel).getAllByRole('listitem')
+    expect(items).toHaveLength(6)
+
+    // Existing steps and their order are unaffected.
+    expect(items[0]).toHaveTextContent('navigate')
+    expect(items[1]).toHaveTextContent('input')
+    expect(items[1]).toHaveTextContent('#username')
+    expect(items[2]).toHaveTextContent('input')
+    expect(items[2]).toHaveTextContent('#password')
+    expect(items[3]).toHaveTextContent('click')
+    expect(items[3]).toHaveTextContent('#login-button')
+    expect(items[4]).toHaveTextContent('verify')
+
+    const newStep = items[5]
+    expect(newStep).toHaveTextContent('click')
+    expect(newStep).toHaveAttribute('aria-selected', 'true')
+    items
+      .filter((item) => item !== newStep)
+      .forEach((item) => expect(item).toHaveAttribute('aria-selected', 'false'))
+
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+    expect(propertiesPanel).toHaveTextContent('click')
+  })
+
+  it('editing the target value field updates that step\'s data, picked up by Save', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(updateTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const enterUsernameStep = items[1]
+    await user.click(enterUsernameStep)
+
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+    const targetValueField = within(propertiesPanel).getByLabelText('Target value')
+    await user.clear(targetValueField)
+    await user.type(targetValueField, '#new-username-field')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(updateTest).toHaveBeenCalledWith(demoPayLoginTest.id, {
+      name: demoPayLoginTest.name,
+      steps: demoPayLoginTest.steps.map(({ action, target, value }, index) =>
+        index === 1
+          ? { action, target: { ...target, value: '#new-username-field' }, value }
+          : { action, target, value },
+      ),
+    })
+  })
+
+  it('editing the value field updates that step\'s data, picked up by Save', async () => {
+    vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(updateTest).mockResolvedValue(demoPayLoginTest)
+    const user = userEvent.setup()
+    render(<TestDesigner testId={demoPayLoginTest.id} />)
+
+    const testStepsPanel = screen.getByRole('region', { name: 'Test Steps' })
+    const items = await within(testStepsPanel).findAllByRole('listitem')
+    const enterUsernameStep = items[1]
+    await user.click(enterUsernameStep)
+
+    const propertiesPanel = screen.getByRole('region', { name: 'Properties' })
+    const valueField = within(propertiesPanel).getByLabelText('Value')
+    await user.clear(valueField)
+    await user.type(valueField, 'someone_else')
+
+    const saveButton = screen.getByRole('button', { name: 'Save test' })
+    await user.click(saveButton)
+
+    expect(updateTest).toHaveBeenCalledWith(demoPayLoginTest.id, {
+      name: demoPayLoginTest.name,
+      steps: demoPayLoginTest.steps.map(({ action, target, value }, index) =>
+        index === 1 ? { action, target, value: 'someone_else' } : { action, target, value },
+      ),
+    })
   })
 
   it('reorders steps: moving the last step to the first position', async () => {
