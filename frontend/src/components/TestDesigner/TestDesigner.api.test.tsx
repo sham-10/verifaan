@@ -5,6 +5,7 @@ import { TestDesigner } from './TestDesigner'
 
 vi.mock('@/api/client', () => ({
   getTest: vi.fn(),
+  getTestExecutions: vi.fn().mockResolvedValue([]),
 }))
 
 describe('TestDesigner (fetched from the API)', () => {

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { getExecution, getTest, runTest, updateTest } from '@/api/client'
-import type { ExecutionStatus } from '@/api/client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getExecution, getTest, getTestExecutions, runTest, updateTest } from '@/api/client'
+import type { ExecutionStatus, ExecutionSummary } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import type { Step, StepAction } from '@/fixtures/demoPayLogin'
 
@@ -24,6 +24,12 @@ function createDefaultStep(action: StepAction): Step {
     step.value = ''
   }
   return step
+}
+
+function formatDuration(startedAt: string, finishedAt: string | null): string {
+  if (!finishedAt) return ''
+  const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+  return `${(durationMs / 1000).toFixed(1)}s`
 }
 
 const propertiesInputClassName =
@@ -92,6 +98,30 @@ function PropertiesPanelContent({
   )
 }
 
+interface ExecutionResultProps {
+  status: ExecutionStatus | 'idle'
+  log: string
+}
+
+function ExecutionResult({ status, log }: ExecutionResultProps) {
+  if (status === 'pass') {
+    return <p className="mb-2 text-sm font-medium text-status-pass">PASS</p>
+  }
+  if (status === 'fail') {
+    return (
+      <div className="mb-2 flex flex-col gap-1">
+        <p className="text-sm font-medium text-status-fail">FAIL</p>
+        {log && (
+          <pre className="whitespace-pre-wrap font-mono text-xs text-text-primary/70">
+            {log}
+          </pre>
+        )}
+      </div>
+    )
+  }
+  return null
+}
+
 export function TestDesigner({ testId }: TestDesignerProps) {
   const [testName, setTestName] = useState('')
   const [steps, setSteps] = useState<Step[]>([])
@@ -103,7 +133,13 @@ export function TestDesigner({ testId }: TestDesignerProps) {
   const [runStatus, setRunStatus] = useState<ExecutionStatus | 'idle'>('idle')
   const [runLog, setRunLog] = useState('')
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([])
+  const [viewedExecution, setViewedExecution] = useState<ExecutionSummary | null>(null)
   const selectedStep = steps.find((step) => step.id === selectedStepId) ?? null
+
+  const refreshExecutionHistory = useCallback(() => {
+    getTestExecutions(testId).then(setExecutionHistory)
+  }, [testId])
 
   useEffect(() => {
     getTest(testId).then((test) => {
@@ -111,6 +147,10 @@ export function TestDesigner({ testId }: TestDesignerProps) {
       setSteps(test.steps)
     })
   }, [testId])
+
+  useEffect(() => {
+    refreshExecutionHistory()
+  }, [refreshExecutionHistory])
 
   useEffect(() => {
     return () => clearTimeout(saveSuccessTimeoutRef.current)
@@ -149,6 +189,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
         }
         setRunStatus(execution.status)
         setRunLog(execution.log)
+        refreshExecutionHistory()
       })
       .catch((error) => {
         const reason = error instanceof Error ? error.message : String(error)
@@ -161,6 +202,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     clearTimeout(pollTimeoutRef.current)
     setRunStatus('running')
     setRunLog('')
+    setViewedExecution(null)
     try {
       const { executionId } = await runTest(testId)
       pollExecution(executionId)
@@ -202,7 +244,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
   }
 
   return (
-    <div className="grid h-screen grid-cols-[220px_1fr_280px] bg-bg-panel text-text-primary">
+    <div className="grid h-screen grid-cols-[220px_1fr_240px_280px] bg-bg-panel text-text-primary">
       <section
         aria-label="Actions"
         className="border-r border-white/10 bg-bg-surface p-3"
@@ -248,22 +290,13 @@ export function TestDesigner({ testId }: TestDesignerProps) {
         {saveError && (
           <p className="mb-2 text-sm text-text-primary">{saveError}</p>
         )}
-        {runStatus === 'running' && (
+        {runStatus === 'running' && !viewedExecution && (
           <p className="mb-2 text-sm text-text-primary/70">Running</p>
         )}
-        {runStatus === 'pass' && (
-          <p className="mb-2 text-sm font-medium text-status-pass">PASS</p>
-        )}
-        {runStatus === 'fail' && (
-          <div className="mb-2 flex flex-col gap-1">
-            <p className="text-sm font-medium text-status-fail">FAIL</p>
-            {runLog && (
-              <pre className="whitespace-pre-wrap font-mono text-xs text-text-primary/70">
-                {runLog}
-              </pre>
-            )}
-          </div>
-        )}
+        <ExecutionResult
+          status={viewedExecution ? viewedExecution.status : runStatus}
+          log={viewedExecution ? viewedExecution.log : runLog}
+        />
         <ol className="flex flex-col gap-1">
           {steps.map((step, index) => {
             const isSelected = step.id === selectedStepId
@@ -331,6 +364,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
         </ol>
       </section>
 
+
       <section
         aria-label="Properties"
         className="border-l border-white/10 bg-bg-surface p-3"
@@ -349,6 +383,43 @@ export function TestDesigner({ testId }: TestDesignerProps) {
           />
         )}
       </section>
+
+      <section
+        aria-label="Execution History"
+        className="overflow-y-auto border-l border-white/10 bg-bg-surface p-3"
+      >
+        <h2 className="mb-2 text-sm font-medium">Execution History</h2>
+        <ol className="flex flex-col gap-1">
+          {executionHistory.map((execution) => (
+            <li
+              key={execution.id}
+              role="listitem"
+              tabIndex={0}
+              onClick={() => setViewedExecution(execution)}
+              className="flex cursor-pointer items-center gap-2 rounded-[3px] border border-white/10 bg-bg-panel px-2.5 py-1.5 text-sm"
+            >
+              <span
+                className={`text-xs font-medium ${
+                  execution.status === 'pass' ? 'text-status-pass' : 'text-status-fail'
+                }`}
+              >
+                {execution.status.toUpperCase()}
+              </span>
+              <time
+                dateTime={execution.startedAt}
+                data-testid="execution-timestamp"
+                className="text-xs text-text-primary/50"
+              >
+                {new Date(execution.startedAt).toLocaleString()}
+              </time>
+              <span className="ml-auto text-xs text-text-primary/70">
+                {formatDuration(execution.startedAt, execution.finishedAt)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+      
     </div>
   )
 }

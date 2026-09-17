@@ -7,16 +7,6 @@ import { runSteps } from "./execution/runSteps.js";
 
 const prisma = new PrismaClient();
 
-// Resolves as soon as the callback it's handed is invoked, letting a route
-// hand a value back to its caller before an async chain finishes.
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
 const ALLOWED_STEP_ACTIONS = ["navigate", "input", "click", "verify"] as const;
 
 function hasOnlyValidStepActions(steps: Array<{ action: string }>): boolean {
@@ -45,6 +35,75 @@ function serializeTest<T extends { steps: Array<Parameters<typeof serializeStep>
   return { ...test, steps: test.steps.map(serializeStep) };
 }
 
+interface DbStep {
+  id: string;
+  order: number;
+  action: string;
+  targetType: string;
+  targetValue: string;
+  value: string | null;
+}
+
+interface RunnerStep {
+  id: string;
+  action: string;
+  target: { type: string; value: string };
+  value?: string;
+}
+
+// The runner (Playwright) works off ADR-004's { type, value } target shape,
+// in step order, rather than the DB's flat targetType/targetValue columns.
+function toRunnerSteps(dbSteps: DbStep[]): RunnerStep[] {
+  return dbSteps
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((step) => ({
+      id: step.id,
+      action: step.action,
+      target: { type: step.targetType, value: step.targetValue },
+      ...(step.value !== null ? { value: step.value } : {}),
+    }));
+}
+
+async function getHeadlessSetting(prisma: PrismaClient): Promise<boolean> {
+  const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
+  return settings?.headless ?? true;
+}
+
+// Drives one Test run in a real browser: launches Chromium, runs the steps,
+// and always closes the browser afterwards. This is the runner handed to
+// executeTest, which is responsible for recording the Execution's outcome.
+async function runStepsInBrowser(steps: RunnerStep[], headless: boolean): Promise<void> {
+  const browser = await chromium.launch({ headless });
+  try {
+    const page = await browser.newPage();
+    await runSteps(page, steps);
+  } finally {
+    await browser.close();
+  }
+}
+
+// Kicks off a Test run in the background and resolves with the new
+// Execution's id as soon as it's created, without waiting for the run
+// itself to finish. executeTest keeps running after this resolves, and
+// records the pass/fail outcome once the browser run settles.
+function startExecution(
+  prisma: PrismaClient,
+  testId: string,
+  steps: RunnerStep[],
+  headless: boolean,
+): Promise<string> {
+  return new Promise((resolveExecutionId) => {
+    void executeTest(
+      prisma,
+      testId,
+      steps,
+      (steps) => runStepsInBrowser(steps, headless),
+      resolveExecutionId,
+    );
+  });
+}
+
 export function buildServer() {
   const app = Fastify();
 
@@ -55,6 +114,28 @@ export function buildServer() {
 
   app.get("/health", async () => {
     return { status: "ok" };
+  });
+
+  app.get("/settings", async () => {
+    const settings = await prisma.settings.upsert({
+      where: { id: "singleton" },
+      update: {},
+      create: { id: "singleton" },
+    });
+
+    return { headless: settings.headless };
+  });
+
+  app.put<{ Body: { headless: boolean } }>("/settings", async (request) => {
+    const { headless } = request.body;
+
+    const settings = await prisma.settings.upsert({
+      where: { id: "singleton" },
+      update: { headless },
+      create: { id: "singleton", headless },
+    });
+
+    return { headless: settings.headless };
   });
 
   app.get("/projects", async () => {
@@ -125,6 +206,20 @@ export function buildServer() {
     return serializeTest(test);
   });
 
+  app.get<{ Params: { id: string } }>("/tests/:id/executions", async (request, reply) => {
+    const { id } = request.params;
+
+    const test = await prisma.test.findUnique({ where: { id } });
+    if (!test) {
+      return reply.status(404).send();
+    }
+
+    return prisma.execution.findMany({
+      where: { testId: id },
+      orderBy: { startedAt: "desc" },
+    });
+  });
+
   app.put<{
     Params: { id: string };
     Body: {
@@ -184,35 +279,9 @@ export function buildServer() {
       return reply.status(404).send();
     }
 
-    const steps = test.steps
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((step) => ({
-        id: step.id,
-        action: step.action,
-        target: { type: step.targetType, value: step.targetValue },
-        value: step.value ?? undefined,
-      }));
-
-    const executionIdReady = createDeferred<string>();
-
-    void executeTest(
-      prisma,
-      id,
-      steps,
-      async (steps) => {
-        const browser = await chromium.launch();
-        try {
-          const page = await browser.newPage();
-          await runSteps(page, steps);
-        } finally {
-          await browser.close();
-        }
-      },
-      (executionId) => executionIdReady.resolve(executionId),
-    );
-
-    const executionId = await executionIdReady.promise;
+    const steps = toRunnerSteps(test.steps);
+    const headless = await getHeadlessSetting(prisma);
+    const executionId = await startExecution(prisma, id, steps, headless);
 
     return reply.status(202).send({ executionId });
   });

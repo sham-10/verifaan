@@ -9,6 +9,7 @@ vi.mock('@/api/client', () => ({
   getProjects: vi.fn(),
   getProjectTests: vi.fn(),
   getTest: vi.fn(),
+  getTestExecutions: vi.fn().mockResolvedValue([]),
 }))
 
 function LocationDisplay() {

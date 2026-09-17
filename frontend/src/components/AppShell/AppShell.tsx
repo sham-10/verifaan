@@ -60,6 +60,15 @@ function ReportsIcon() {
   )
 }
 
+function SettingsIcon() {
+  return (
+    <NavIcon>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v2.5M12 18v2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M3.5 12H6M18 12h2.5M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
+    </NavIcon>
+  )
+}
+
 const navLinkClassName =
   'flex size-9 items-center justify-center rounded-[3px] text-text-primary/60 transition-colors hover:bg-bg-surface hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent aria-[current=page]:bg-bg-surface aria-[current=page]:text-accent'
 
@@ -117,6 +126,9 @@ export function AppShell({ children }: AppShellProps) {
           >
             <ReportsIcon />
           </button>
+          <NavLink to="/settings" className={navLinkClassName} aria-label="Settings" title="Settings">
+            <SettingsIcon />
+          </NavLink>
         </nav>
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>

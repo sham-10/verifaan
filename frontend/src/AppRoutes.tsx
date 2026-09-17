@@ -1,6 +1,7 @@
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell/AppShell'
 import { ProjectList } from '@/components/ProjectList/ProjectList'
+import { Settings } from '@/components/Settings/Settings'
 import { TestList } from '@/components/TestList/TestList'
 import { TestDesigner } from '@/components/TestDesigner/TestDesigner'
 
@@ -34,6 +35,7 @@ export function AppRoutes() {
         <Route path="/" element={<ProjectListRoute />} />
         <Route path="/projects/:id" element={<TestListRoute />} />
         <Route path="/projects/:id/tests/:testId" element={<TestDesignerRoute />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </AppShell>
   )

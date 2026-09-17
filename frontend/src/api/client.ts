@@ -8,6 +8,14 @@ export interface Execution {
   log: string
 }
 
+export interface ExecutionSummary {
+  id: string
+  status: ExecutionStatus
+  startedAt: string
+  finishedAt: string | null
+  log: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -17,6 +25,10 @@ export interface Project {
 export interface TestSummary {
   id: string
   name: string
+}
+
+export interface Settings {
+  headless: boolean
 }
 
 function getApiBaseUrl(): string {
@@ -96,6 +108,34 @@ export async function runTest(id: string): Promise<{ executionId: string }> {
   const response = await fetch(`${getApiBaseUrl()}/tests/${id}/run`, { method: 'POST' })
   if (!response.ok) {
     throw new Error(`Failed to run test ${id}: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function getSettings(): Promise<Settings> {
+  const response = await fetch(`${getApiBaseUrl()}/settings`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch settings: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function updateSettings(data: Settings): Promise<Settings> {
+  const response = await fetch(`${getApiBaseUrl()}/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to update settings: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function getTestExecutions(testId: string): Promise<ExecutionSummary[]> {
+  const response = await fetch(`${getApiBaseUrl()}/tests/${testId}/executions`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch executions for test ${testId}: ${response.status}`)
   }
   return response.json()
 }

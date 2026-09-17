@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
@@ -55,6 +55,26 @@ describe('AppShell', () => {
     const projectsLink = screen.getByRole('link', { name: /projects/i })
     expect(projectsLink).toBeInTheDocument()
     expect(projectsLink).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('renders a functional, clickable Settings nav item below the other icons', () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>content</div>
+        </AppShell>
+      </MemoryRouter>,
+    )
+
+    const settingsLink = screen.getByRole('link', { name: /settings/i })
+    expect(settingsLink).toBeInTheDocument()
+    expect(settingsLink).not.toHaveAttribute('aria-disabled', 'true')
+    expect(settingsLink).toHaveAttribute('href', '/settings')
+
+    const navItems = within(screen.getByRole('navigation', { name: /primary/i })).getAllByRole(
+      'link',
+    )
+    expect(navItems[navItems.length - 1]).toBe(settingsLink)
   })
 
   it('renders Dashboard, Executions, and Reports as disabled and not clickable, with a "coming soon" tooltip', async () => {

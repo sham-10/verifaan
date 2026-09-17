@@ -39,6 +39,11 @@ model Step {
   value       String?
 }
 
+model Settings {
+  id       String  @id @default("singleton")
+  headless Boolean @default(true)
+}
+
 model Execution {
   id         String    @id @default(cuid())
   testId     String

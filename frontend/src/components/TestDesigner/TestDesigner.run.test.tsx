@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getExecution, getTest, runTest, updateTest } from '@/api/client'
+import { getExecution, getTest, getTestExecutions, runTest, updateTest } from '@/api/client'
 import { demoPayLoginTest } from '@/fixtures/demoPayLogin'
 import { TestDesigner } from './TestDesigner'
 
@@ -10,6 +10,7 @@ vi.mock('@/api/client', () => ({
   updateTest: vi.fn(),
   runTest: vi.fn(),
   getExecution: vi.fn(),
+  getTestExecutions: vi.fn(),
 }))
 
 async function renderWithSteps() {
@@ -22,6 +23,7 @@ async function renderWithSteps() {
 describe('TestDesigner (Run)', () => {
   beforeEach(() => {
     vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
+    vi.mocked(getTestExecutions).mockResolvedValue([])
   })
 
   it('runs the test, shows a running state, then resolves to PASS', async () => {
