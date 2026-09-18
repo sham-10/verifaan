@@ -54,6 +54,37 @@ describe("POST /scan", () => {
     expect(resolveCandidates).toHaveBeenCalledTimes(4);
   });
 
+  it("sorts each element's candidates descending by score before returning them", async () => {
+    // Mirrors a real reported bug: resolveCandidates' internal picks
+    // (getBestCandidate) are order-independent and correct, but the raw
+    // array handed back -- and therefore the API response -- was never
+    // actually sorted, so a real scan showed scores like 43, 50, 30, 50,
+    // 50, 50 for one button, out of order.
+    const unsortedCandidates = [
+      { type: "text", value: "Login", score: 43 },
+      { type: "class", value: "btn", score: 50 },
+      { type: "position", value: { tag: "button", index: 0 }, score: 30 },
+      { type: "compound", value: { parent: {}, child: {} }, score: 50 },
+      { type: "compound", value: { parent: {}, child: {} }, score: 50 },
+      { type: "compound", value: { parent: {}, child: {} }, score: 50 },
+    ];
+    vi.mocked(resolveCandidates).mockResolvedValue(unsortedCandidates as never);
+
+    const app = buildServer();
+    await app.ready();
+
+    const response = await supertest(app.server)
+      .post("/scan")
+      .send({ url: fixtureUrl });
+
+    await app.close();
+
+    const scores = response.body.elements.button[0].candidates.map(
+      (c: { score: number }) => c.score,
+    );
+    expect(scores).toEqual([50, 50, 50, 50, 43, 30]);
+  });
+
   // Spies on the real chromium.launch, but still lets it launch a real
   // browser -- it just also spies on that browser's own close() method, so
   // we can assert close was called without racing Playwright's internal

@@ -148,7 +148,13 @@ async function scanPage(
       (el as Element).tagName.toLowerCase(),
     )) as ScannableTag;
     const candidates = await resolveCandidates(handle, page);
-    elements[CATEGORY_BY_TAG[tag]]!.push({ tag, candidates });
+    // getBestCandidate (resolveCandidates.ts) already picks the true
+    // highest-scoring candidate regardless of array order, so execution was
+    // never affected -- but the raw list handed back here wasn't actually
+    // sorted, so a scan's displayed candidates could show scores out of
+    // order (e.g. 43, 50, 30, 50, 50, 50). Sort it before returning it.
+    const sortedCandidates = [...candidates].sort((a, b) => b.score - a.score);
+    elements[CATEGORY_BY_TAG[tag]]!.push({ tag, candidates: sortedCandidates });
   }
 
   return elements;

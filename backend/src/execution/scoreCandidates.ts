@@ -135,13 +135,34 @@ function scoreForMatchCount(type: CandidateType, matchCount: number): number {
   return Math.round(basePriority / matchCount);
 }
 
+// Index of this element among every same-tag element in the whole page,
+// not just its immediate parent's children -- real markup very often wraps
+// each field in its own container (e.g. a login form's three <input>s each
+// inside their own <div>), so scoping to the immediate parent alone made
+// every one of them "the only same-tag child" and reported index 0.
+//
+// Everything here must be self-contained: Playwright serializes this
+// function's source and runs it inside the page, so it can't reference any
+// outer module-level helper -- only what's declared inside the callback.
 async function computeSiblingPosition(element: ElementHandle): Promise<number> {
   return element.evaluate((el) => {
     const node = el as Element;
-    const siblings = Array.from(node.parentElement?.children ?? []);
-    return siblings
-      .filter((sibling) => sibling.tagName === node.tagName)
-      .indexOf(node);
+
+    function findRoot(current: Element): Element {
+      return current.parentElement ? findRoot(current.parentElement) : current;
+    }
+
+    function collectByTagName(current: Element, tagName: string, out: Element[]): Element[] {
+      if (current.tagName === tagName) out.push(current);
+      for (const child of Array.from(current.children)) {
+        collectByTagName(child, tagName, out);
+      }
+      return out;
+    }
+
+    const root = findRoot(node);
+    const sameTagElements = collectByTagName(root, node.tagName, []);
+    return sameTagElements.indexOf(node);
   });
 }
 
