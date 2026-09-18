@@ -12,20 +12,28 @@ export type CandidateType =
   | "text"
   | "classPrefix"
   | "class"
-  | "position";
+  | "position"
+  | "compound";
 
 export interface PositionValue {
   tag: string;
   index: number;
 }
 
+export interface CompoundValue {
+  parent: Candidate;
+  child: Candidate;
+}
+
 export interface Candidate {
   type: CandidateType;
-  value: string | PositionValue;
+  value: string | PositionValue | CompoundValue;
   score: number;
 }
 
-const BASE_PRIORITY: Record<CandidateType, number> = {
+// Shared with resolveCandidates.ts, which derives a compound candidate's
+// base priority from the weaker of its parent/child piece.
+export const BASE_PRIORITY: Record<CandidateType, number> = {
   testId: 100,
   id: 100,
   name: 90,
@@ -33,6 +41,7 @@ const BASE_PRIORITY: Record<CandidateType, number> = {
   classPrefix: 70,
   class: 50,
   position: 30,
+  compound: 100, // unused directly; compound priority is derived, see above
 };
 
 export async function scoreCandidates(
