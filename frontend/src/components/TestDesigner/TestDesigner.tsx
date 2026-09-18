@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getExecution, getTest, getTestExecutions, runTest, updateTest } from '@/api/client'
 import type { ExecutionStatus, ExecutionSummary } from '@/api/client'
 import { Button } from '@/components/ui/button'
+import { useActiveTestDesigner } from '@/context/ActiveTestDesignerContext'
 import type { Step, StepAction } from '@/fixtures/demoPayLogin'
 
 const POLL_INTERVAL_MS = 500
@@ -24,6 +25,15 @@ function createDefaultStep(action: StepAction): Step {
     step.value = ''
   }
   return step
+}
+
+interface SavePayload {
+  name: string
+  steps: { action: StepAction; target: { type: string; value: string }; value?: string }[]
+}
+
+function toSavePayload(name: string, steps: Step[]): SavePayload {
+  return { name, steps: steps.map(({ action, target, value }) => ({ action, target, value })) }
 }
 
 function formatDuration(startedAt: string, finishedAt: string | null): string {
@@ -124,6 +134,7 @@ function ExecutionResult({ status, log }: ExecutionResultProps) {
 
 export function TestDesigner({ testId }: TestDesignerProps) {
   const [testName, setTestName] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -135,7 +146,13 @@ export function TestDesigner({ testId }: TestDesignerProps) {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([])
   const [viewedExecution, setViewedExecution] = useState<ExecutionSummary | null>(null)
+  const [savedSnapshot, setSavedSnapshot] = useState<SavePayload | null>(null)
   const selectedStep = steps.find((step) => step.id === selectedStepId) ?? null
+  const isDirty =
+    savedSnapshot !== null &&
+    JSON.stringify(toSavePayload(testName, steps)) !== JSON.stringify(savedSnapshot)
+
+  const { setActiveTestDesigner } = useActiveTestDesigner()
 
   const refreshExecutionHistory = useCallback(() => {
     getTestExecutions(testId).then(setExecutionHistory)
@@ -145,6 +162,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     getTest(testId).then((test) => {
       setTestName(test.name)
       setSteps(test.steps)
+      setSavedSnapshot(toSavePayload(test.name, test.steps))
     })
   }, [testId])
 
@@ -160,16 +178,15 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     return () => clearTimeout(pollTimeoutRef.current)
   }, [])
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     setIsSaving(true)
     setSaveError(null)
     setSaveSuccess(false)
     clearTimeout(saveSuccessTimeoutRef.current)
     try {
-      await updateTest(testId, {
-        name: testName,
-        steps: steps.map(({ action, target, value }) => ({ action, target, value })),
-      })
+      const payload = toSavePayload(testName, steps)
+      await updateTest(testId, payload)
+      setSavedSnapshot(payload)
       setSaveSuccess(true)
       saveSuccessTimeoutRef.current = setTimeout(() => setSaveSuccess(false), 3000)
     } catch (error) {
@@ -178,7 +195,12 @@ export function TestDesigner({ testId }: TestDesignerProps) {
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [testId, testName, steps])
+
+  useEffect(() => {
+    setActiveTestDesigner({ isDirty, save: handleSave })
+    return () => setActiveTestDesigner(null)
+  }, [isDirty, handleSave, setActiveTestDesigner])
 
   function pollExecution(executionId: string) {
     getExecution(executionId)
@@ -244,182 +266,206 @@ export function TestDesigner({ testId }: TestDesignerProps) {
   }
 
   return (
-    <div className="grid h-screen grid-cols-[220px_1fr_240px_280px] bg-bg-panel text-text-primary">
-      <section
-        aria-label="Actions"
-        className="border-r border-white/10 bg-bg-surface p-3"
-      >
-        <h2 className="mb-2 text-sm font-medium">Actions</h2>
-        <div className="flex flex-col gap-1">
-          {ACTIONS.map(({ action, label }) => (
-            <Button
-              key={action}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="justify-start"
-              onClick={() => handleAddStep(action)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </section>
-
-      <section aria-label="Test Steps" className="overflow-y-auto p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium">Test Steps</h2>
-          <div className="flex gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleRun}
-              disabled={runStatus === 'running'}
-            >
-              Run test
-            </Button>
-            <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
-              Save test
-            </Button>
-          </div>
-        </div>
-        {saveSuccess && (
-          <p className="mb-2 text-sm text-text-primary/70">Test saved</p>
-        )}
-        {saveError && (
-          <p className="mb-2 text-sm text-text-primary">{saveError}</p>
-        )}
-        {runStatus === 'running' && !viewedExecution && (
-          <p className="mb-2 text-sm text-text-primary/70">Running</p>
-        )}
-        <ExecutionResult
-          status={viewedExecution ? viewedExecution.status : runStatus}
-          log={viewedExecution ? viewedExecution.log : runLog}
-        />
-        <ol className="flex flex-col gap-1">
-          {steps.map((step, index) => {
-            const isSelected = step.id === selectedStepId
-            return (
-              <li
-                key={step.id}
-                role="listitem"
-                aria-selected={isSelected}
-                tabIndex={0}
-                onClick={() => setSelectedStepId(step.id)}
-                className={`flex cursor-pointer items-center gap-2 rounded-[3px] border px-2.5 py-1.5 text-sm ${
-                  isSelected
-                    ? 'border-accent bg-accent/10'
-                    : 'border-white/10 bg-bg-surface'
-                }`}
-              >
-                <span className="text-text-primary/50">{index + 1}</span>
-                <span className="font-medium">{step.action}</span>
-                <span className="font-mono text-text-primary/70">
-                  {step.target.value}
-                </span>
-                <div className="ml-auto flex gap-0.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Move up"
-                    disabled={index === 0}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      moveStep(index, -1)
-                    }}
-                  >
-                    ↑
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Move down"
-                    disabled={index === steps.length - 1}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      moveStep(index, 1)
-                    }}
-                  >
-                    ↓
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Delete"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      deleteStep(step.id)
-                    }}
-                  >
-                    ×
-                  </Button>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
-      </section>
-
-
-      <section
-        aria-label="Properties"
-        className="border-l border-white/10 bg-bg-surface p-3"
-      >
-        <h2 className="mb-2 text-sm font-medium">Properties</h2>
-        {selectedStep && (
-          <PropertiesPanelContent
-            step={selectedStep}
-            onTargetTypeChange={(value) =>
-              updateSelectedStep({ target: { ...selectedStep.target, type: value } })
-            }
-            onTargetValueChange={(value) =>
-              updateSelectedStep({ target: { ...selectedStep.target, value } })
-            }
-            onValueChange={(value) => updateSelectedStep({ value })}
+    <div className="flex h-screen flex-col bg-bg-panel text-text-primary">
+      <div className="flex h-10 shrink-0 items-center gap-3 border-b border-white/10 px-3">
+        {isEditingName ? (
+          <input
+            aria-label="Test name"
+            autoFocus
+            value={testName}
+            onChange={(event) => setTestName(event.target.value)}
+            onBlur={() => setIsEditingName(false)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur()
+              }
+            }}
+            className="rounded-[3px] border border-white/10 bg-bg-panel px-2 py-1 text-sm font-medium text-text-primary focus-visible:border-accent focus-visible:outline-none"
           />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsEditingName(true)}
+            className="rounded-[3px] px-1 py-1 text-sm font-medium hover:bg-bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+          >
+            {testName || 'Untitled test'}
+          </button>
         )}
-      </section>
+        <div className="ml-auto flex gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleRun}
+            disabled={runStatus === 'running'}
+          >
+            Run test
+          </Button>
+          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
+            Save test
+          </Button>
+        </div>
+      </div>
 
-      <section
-        aria-label="Execution History"
-        className="overflow-y-auto border-l border-white/10 bg-bg-surface p-3"
-      >
-        <h2 className="mb-2 text-sm font-medium">Execution History</h2>
-        <ol className="flex flex-col gap-1">
-          {executionHistory.map((execution) => (
-            <li
-              key={execution.id}
-              role="listitem"
-              tabIndex={0}
-              onClick={() => setViewedExecution(execution)}
-              className="flex cursor-pointer items-center gap-2 rounded-[3px] border border-white/10 bg-bg-panel px-2.5 py-1.5 text-sm"
-            >
-              <span
-                className={`text-xs font-medium ${
-                  execution.status === 'pass' ? 'text-status-pass' : 'text-status-fail'
-                }`}
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_240px_280px] bg-bg-panel text-text-primary">
+        <section
+          aria-label="Actions"
+          className="border-r border-white/10 bg-bg-surface p-3"
+        >
+          <h2 className="mb-2 text-sm font-medium">Actions</h2>
+          <div className="flex flex-col gap-1">
+            {ACTIONS.map(({ action, label }) => (
+              <Button
+                key={action}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-start"
+                onClick={() => handleAddStep(action)}
               >
-                {execution.status.toUpperCase()}
-              </span>
-              <time
-                dateTime={execution.startedAt}
-                data-testid="execution-timestamp"
-                className="text-xs text-text-primary/50"
+                {label}
+              </Button>
+            ))}
+          </div>
+        </section>
+
+        <section aria-label="Test Steps" className="overflow-y-auto p-3">
+          <h2 className="mb-2 text-sm font-medium">Test Steps</h2>
+          {saveSuccess && (
+            <p className="mb-2 text-sm text-text-primary/70">Test saved</p>
+          )}
+          {saveError && (
+            <p className="mb-2 text-sm text-text-primary">{saveError}</p>
+          )}
+          {runStatus === 'running' && !viewedExecution && (
+            <p className="mb-2 text-sm text-text-primary/70">Running</p>
+          )}
+          <ExecutionResult
+            status={viewedExecution ? viewedExecution.status : runStatus}
+            log={viewedExecution ? viewedExecution.log : runLog}
+          />
+          <ol className="flex flex-col gap-1">
+            {steps.map((step, index) => {
+              const isSelected = step.id === selectedStepId
+              return (
+                <li
+                  key={step.id}
+                  role="listitem"
+                  aria-selected={isSelected}
+                  tabIndex={0}
+                  onClick={() => setSelectedStepId(step.id)}
+                  className={`flex cursor-pointer items-center gap-2 rounded-[3px] border px-2.5 py-1.5 text-sm ${
+                    isSelected
+                      ? 'border-accent bg-accent/10'
+                      : 'border-white/10 bg-bg-surface'
+                  }`}
+                >
+                  <span className="text-text-primary/50">{index + 1}</span>
+                  <span className="font-medium">{step.action}</span>
+                  <span className="font-mono text-text-primary/70">
+                    {step.target.value}
+                  </span>
+                  <div className="ml-auto flex gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Move up"
+                      disabled={index === 0}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        moveStep(index, -1)
+                      }}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Move down"
+                      disabled={index === steps.length - 1}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        moveStep(index, 1)
+                      }}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Delete"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        deleteStep(step.id)
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+
+        <section
+          aria-label="Properties"
+          className="border-l border-white/10 bg-bg-surface p-3"
+        >
+          <h2 className="mb-2 text-sm font-medium">Properties</h2>
+          {selectedStep && (
+            <PropertiesPanelContent
+              step={selectedStep}
+              onTargetTypeChange={(value) =>
+                updateSelectedStep({ target: { ...selectedStep.target, type: value } })
+              }
+              onTargetValueChange={(value) =>
+                updateSelectedStep({ target: { ...selectedStep.target, value } })
+              }
+              onValueChange={(value) => updateSelectedStep({ value })}
+            />
+          )}
+        </section>
+
+        <section
+          aria-label="Execution History"
+          className="overflow-y-auto border-l border-white/10 bg-bg-surface p-3"
+        >
+          <h2 className="mb-2 text-sm font-medium">Execution History</h2>
+          <ol className="flex flex-col gap-1">
+            {executionHistory.map((execution) => (
+              <li
+                key={execution.id}
+                role="listitem"
+                tabIndex={0}
+                onClick={() => setViewedExecution(execution)}
+                className="flex cursor-pointer items-center gap-2 rounded-[3px] border border-white/10 bg-bg-panel px-2.5 py-1.5 text-sm"
               >
-                {new Date(execution.startedAt).toLocaleString()}
-              </time>
-              <span className="ml-auto text-xs text-text-primary/70">
-                {formatDuration(execution.startedAt, execution.finishedAt)}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
-      
+                <span
+                  className={`text-xs font-medium ${
+                    execution.status === 'pass' ? 'text-status-pass' : 'text-status-fail'
+                  }`}
+                >
+                  {execution.status.toUpperCase()}
+                </span>
+                <time
+                  dateTime={execution.startedAt}
+                  data-testid="execution-timestamp"
+                  className="text-xs text-text-primary/50"
+                >
+                  {new Date(execution.startedAt).toLocaleString()}
+                </time>
+                <span className="ml-auto text-xs text-text-primary/70">
+                  {formatDuration(execution.startedAt, execution.finishedAt)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
     </div>
   )
 }
