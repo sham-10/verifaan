@@ -3,7 +3,7 @@ import { getExecution, getTest, getTestExecutions, runTest, updateTest } from '@
 import type { ExecutionStatus, ExecutionSummary } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { useActiveTestDesigner } from '@/context/ActiveTestDesignerContext'
-import type { Step, StepAction } from '@/fixtures/demoPayLogin'
+import type { Step, StepAction, TargetValue } from '@/fixtures/demoPayLogin'
 
 const POLL_INTERVAL_MS = 500
 
@@ -29,11 +29,27 @@ function createDefaultStep(action: StepAction): Step {
 
 interface SavePayload {
   name: string
-  steps: { action: StepAction; target: { type: string; value: string }; value?: string }[]
+  steps: { action: StepAction; target: { type: string; value: TargetValue }; value?: string }[]
 }
 
 function toSavePayload(name: string, steps: Step[]): SavePayload {
   return { name, steps: steps.map(({ action, target, value }) => ({ action, target, value })) }
+}
+
+// position ({ tag, index }) and compound ({ parent, child }) targets aren't
+// plain strings, so both the step list and the Properties panel need a
+// human-readable rendering for them instead of the raw object.
+function summarizeCandidateFact(candidate: { type: string; value: unknown }): string {
+  const value = typeof candidate.value === 'string' ? candidate.value : JSON.stringify(candidate.value)
+  return `${candidate.type}: ${value}`
+}
+
+function summarizeTargetValue(value: TargetValue): string {
+  if (typeof value === 'string') return value
+  if ('tag' in value && 'index' in value) {
+    return `${value.tag} (index ${value.index})`
+  }
+  return `${summarizeCandidateFact(value.parent)} > ${summarizeCandidateFact(value.child)}`
 }
 
 function formatDuration(startedAt: string, finishedAt: string | null): string {
@@ -44,6 +60,21 @@ function formatDuration(startedAt: string, finishedAt: string | null): string {
 
 const propertiesInputClassName =
   'rounded-[3px] border border-white/10 bg-bg-panel px-2 py-1.5 font-mono text-sm text-text-primary focus-visible:border-accent focus-visible:outline-none'
+
+// url/locator (VFN-21) plus the neutral candidate types VFN-31/32/33 can
+// produce. Order keeps the original two first for backward familiarity.
+const TARGET_TYPES = [
+  'url',
+  'locator',
+  'testId',
+  'id',
+  'name',
+  'text',
+  'classPrefix',
+  'class',
+  'position',
+  'compound',
+] as const
 
 interface PropertiesPanelContentProps {
   step: Step
@@ -74,21 +105,35 @@ function PropertiesPanelContent({
           onChange={(event) => onTargetTypeChange(event.target.value)}
           className={propertiesInputClassName}
         >
-          <option value="url">url</option>
-          <option value="locator">locator</option>
+          {TARGET_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
         </select>
       </div>
       <div className="flex flex-col gap-1">
-        <label htmlFor="step-target-value" className="text-text-primary/50">
-          Target value
-        </label>
-        <input
-          id="step-target-value"
-          type="text"
-          value={step.target.value}
-          onChange={(event) => onTargetValueChange(event.target.value)}
-          className={propertiesInputClassName}
-        />
+        {typeof step.target.value === 'string' ? (
+          <>
+            <label htmlFor="step-target-value" className="text-text-primary/50">
+              Target value
+            </label>
+            <input
+              id="step-target-value"
+              type="text"
+              value={step.target.value}
+              onChange={(event) => onTargetValueChange(event.target.value)}
+              className={propertiesInputClassName}
+            />
+          </>
+        ) : (
+          <>
+            <span className="text-text-primary/50">Target value</span>
+            <p className={`${propertiesInputClassName} cursor-default select-text`}>
+              {summarizeTargetValue(step.target.value)}
+            </p>
+          </>
+        )}
       </div>
       {step.action === 'input' && (
         <div className="flex flex-col gap-1">
@@ -363,7 +408,7 @@ export function TestDesigner({ testId }: TestDesignerProps) {
                   <span className="text-text-primary/50">{index + 1}</span>
                   <span className="font-medium">{step.action}</span>
                   <span className="font-mono text-text-primary/70">
-                    {step.target.value}
+                    {summarizeTargetValue(step.target.value)}
                   </span>
                   <div className="ml-auto flex gap-0.5">
                     <Button

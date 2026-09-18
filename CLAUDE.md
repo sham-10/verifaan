@@ -52,3 +52,27 @@ Apply these on every change, not just when asked:
 Before building any UI component, read frontend/DESIGN.md for color, type,
 and layout tokens. Do not introduce colors, fonts, or spacing values not
 defined there.
+
+## Engine-neutral locators, never bake in one engine's syntax
+Step targets and locator candidates must always stay plain, engine-neutral
+facts: { type, value }, e.g. { type: "testId", value: "submit-btn" } or
+{ type: "text", value: "Login" }. Never store a ready-to-use selector
+string in one engine's own syntax (not Playwright's page.getByTestId(...)
+or CSS pseudo-classes like :has-text(), not Selenium's By.id(...)) as a
+step's target or a candidate's value.
+
+Translation from a neutral fact into a real, executable call happens only
+at the point of use, and only inside dedicated translator code:
+- Live execution (always Playwright, regardless of a Project's target
+  engine): runSteps.ts translates a neutral fact into Playwright's native
+  locator methods (testId -> page.getByTestId, id -> page.locator('#'+
+  value), text -> page.getByText, css/classPrefix -> page.locator(...)).
+- Code export (Phase 9, Selenium-targeted projects, not built yet): a
+  separate translator will map the same neutral fact to Selenium's native
+  strategies (By.id, By.xpath, etc.).
+
+Reason: a Project's automation engine (Playwright or Selenium) is chosen
+once, per project, but the same stored test data must work for both.
+Baking selector syntax into stored data at capture time breaks that.
+Full reasoning: Confluence space VFN, "Smart Element Capture: Weighted
+Locator Design" and "Phase 4+ Brainstorm" pages.

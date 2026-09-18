@@ -168,7 +168,7 @@ describe('TestDesigner', () => {
     })
   })
 
-  it('renders Target type as a select with exactly the url and locator options', async () => {
+  it('renders Target type as a select including url, locator, and every VFN-31/32/33 neutral candidate type', async () => {
     vi.mocked(getTest).mockResolvedValue(demoPayLoginTest)
     const user = userEvent.setup()
     render(<TestDesigner testId={demoPayLoginTest.id} />)
@@ -184,7 +184,18 @@ describe('TestDesigner', () => {
     const optionLabels = within(targetTypeField as HTMLElement)
       .getAllByRole('option')
       .map((option) => (option as HTMLOptionElement).value)
-    expect(optionLabels).toEqual(['url', 'locator'])
+    expect(optionLabels).toEqual([
+      'url',
+      'locator',
+      'testId',
+      'id',
+      'name',
+      'text',
+      'classPrefix',
+      'class',
+      'position',
+      'compound',
+    ])
   })
 
   it('pre-selects the current step\'s target type in the dropdown', async () => {

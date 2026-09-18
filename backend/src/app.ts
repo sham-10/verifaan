@@ -2,8 +2,11 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
+import type { Page } from "playwright";
 import { executeTest } from "./execution/executeTest.js";
 import { runSteps } from "./execution/runSteps.js";
+import { resolveCandidates } from "./execution/resolveCandidates.js";
+import type { Candidate } from "./execution/scoreCandidates.js";
 
 const prisma = new PrismaClient();
 
@@ -102,6 +105,53 @@ function startExecution(
       resolveExecutionId,
     );
   });
+}
+
+const SCANNABLE_TAGS = ["input", "button", "a", "select"] as const;
+type ScannableTag = (typeof SCANNABLE_TAGS)[number];
+
+// Maps the DOM tag name to the category key it's grouped under in a scan's
+// response; every other key here besides "a" -> "link" is just the tag name.
+const CATEGORY_BY_TAG: Record<ScannableTag, string> = {
+  input: "input",
+  button: "button",
+  a: "link",
+  select: "select",
+};
+
+interface ScannedElement {
+  tag: string;
+  candidates: Candidate[];
+}
+
+// Navigates to the URL and ranks selector candidates (VFN-31/32/33) for
+// every genuinely interactive element on the page -- inputs, buttons,
+// links, and selects -- grouped by category. Generic text elements
+// (p, div, span, headings, ...) are never queried or scored.
+async function scanPage(
+  page: Page,
+  url: string,
+): Promise<Record<string, ScannedElement[]>> {
+  await page.goto(url);
+
+  const elements: Record<string, ScannedElement[]> = {
+    input: [],
+    button: [],
+    link: [],
+    select: [],
+  };
+
+  const handles = await page.$$(SCANNABLE_TAGS.join(", "));
+
+  for (const handle of handles) {
+    const tag = (await handle.evaluate((el) =>
+      (el as Element).tagName.toLowerCase(),
+    )) as ScannableTag;
+    const candidates = await resolveCandidates(handle, page);
+    elements[CATEGORY_BY_TAG[tag]]!.push({ tag, candidates });
+  }
+
+  return elements;
 }
 
 export function buildServer() {
@@ -312,6 +362,22 @@ export function buildServer() {
     });
 
     return reply.status(204).send();
+  });
+
+  app.post<{ Body: { url: string } }>("/scan", async (request, reply) => {
+    const { url } = request.body;
+
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      const elements = await scanPage(page, url);
+      return { url, elements };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.status(400).send({ error: message });
+    } finally {
+      await browser.close();
+    }
   });
 
   return app;

@@ -1,9 +1,25 @@
 export type StepAction = 'navigate' | 'input' | 'click' | 'verify'
 
+// position and compound are VFN-31/32/33's neutral candidate types whose
+// value isn't a plain string -- position is a sibling-index fact, compound
+// nests another two candidates. Every other target type (url, locator,
+// testId, id, name, text, classPrefix, class) carries a plain string.
+export interface TargetPositionValue {
+  tag: string
+  index: number
+}
+
+export interface TargetCompoundValue {
+  parent: { type: string; value: unknown }
+  child: { type: string; value: unknown }
+}
+
+export type TargetValue = string | TargetPositionValue | TargetCompoundValue
+
 export interface Step {
   id: string
   action: StepAction
-  target: { type: string; value: string }
+  target: { type: string; value: TargetValue }
   value?: string
 }
 

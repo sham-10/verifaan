@@ -31,6 +31,27 @@ export interface Settings {
   headless: boolean
 }
 
+export interface ScanCandidate {
+  type: string
+  value: string | Record<string, unknown>
+  score: number
+}
+
+export interface ScannedElement {
+  tag: string
+  candidates: ScanCandidate[]
+}
+
+export interface ScanResult {
+  url: string
+  elements: {
+    input: ScannedElement[]
+    button: ScannedElement[]
+    link: ScannedElement[]
+    select: ScannedElement[]
+  }
+}
+
 function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 }
@@ -144,6 +165,18 @@ export async function getExecution(id: string): Promise<Execution> {
   const response = await fetch(`${getApiBaseUrl()}/executions/${id}`)
   if (!response.ok) {
     throw new Error(`Failed to fetch execution ${id}: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function scanUrl(url: string): Promise<ScanResult> {
+  const response = await fetch(`${getApiBaseUrl()}/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to scan ${url}: ${response.status}`)
   }
   return response.json()
 }
