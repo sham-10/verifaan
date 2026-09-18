@@ -90,36 +90,89 @@ interface ProjectSwitcherProps {
 }
 
 function ProjectSwitcher({ currentProject, otherProjects }: ProjectSwitcherProps) {
+  const navigate = useNavigate()
+  const { activeTestDesigner } = useActiveTestDesigner()
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [pendingProject, setPendingProject] = useState<Project | null>(null)
+
+  function goToTestList(project: Project) {
+    navigate(`/projects/${project.id}`)
+  }
+
+  function handleSelectProject(project: Project) {
+    if (activeTestDesigner?.isDirty) {
+      setPendingProject(project)
+      setIsConfirmOpen(true)
+      return
+    }
+    goToTestList(project)
+  }
+
+  async function handleSaveAndSwitch() {
+    if (!pendingProject) return
+    await activeTestDesigner?.save()
+    goToTestList(pendingProject)
+  }
+
+  function handleDiscardAndSwitch() {
+    if (!pendingProject) return
+    goToTestList(pendingProject)
+  }
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-[3px] px-1.5 py-1 text-xs font-medium text-text-primary hover:bg-bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-        >
-          {currentProject.name}
-          <ChevronDownIcon />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align="start"
-          className="min-w-40 rounded-[3px] border border-white/10 bg-bg-surface p-1 shadow-lg"
-        >
-          {otherProjects.map((project) => (
-            <DropdownMenu.Item
-              key={project.id}
-              className="cursor-pointer rounded-[3px] px-2 py-1.5 text-xs text-text-primary/80 outline-none hover:bg-bg-panel hover:text-text-primary focus-visible:bg-bg-panel"
-            >
-              {project.name}
-            </DropdownMenu.Item>
-          ))}
-          {otherProjects.length === 0 && (
-            <div className="px-2 py-1.5 text-xs text-text-primary/50">No other projects</div>
-          )}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+    <AlertDialog.Root open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded-[3px] px-1.5 py-1 text-xs font-medium text-text-primary hover:bg-bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+          >
+            {currentProject.name}
+            <ChevronDownIcon />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="start"
+            className="min-w-40 rounded-[3px] border border-white/10 bg-bg-surface p-1 shadow-lg"
+          >
+            {otherProjects.map((project) => (
+              <DropdownMenu.Item
+                key={project.id}
+                onSelect={() => handleSelectProject(project)}
+                className="cursor-pointer rounded-[3px] px-2 py-1.5 text-xs text-text-primary/80 outline-none hover:bg-bg-panel hover:text-text-primary focus-visible:bg-bg-panel"
+              >
+                {project.name}
+              </DropdownMenu.Item>
+            ))}
+            {otherProjects.length === 0 && (
+              <div className="px-2 py-1.5 text-xs text-text-primary/50">No other projects</div>
+            )}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 bg-black/50" />
+        <AlertDialog.Content className="fixed top-1/2 left-1/2 w-80 -translate-x-1/2 -translate-y-1/2 rounded-[3px] border border-white/10 bg-bg-surface p-4 text-text-primary">
+          <AlertDialog.Title className="text-sm font-medium">Save changes?</AlertDialog.Title>
+          <AlertDialog.Description className="mt-1 text-xs text-text-primary/60">
+            This test has unsaved changes. Save them before switching projects?
+          </AlertDialog.Description>
+          <div className="mt-4 flex justify-end gap-2">
+            <AlertDialog.Cancel asChild>
+              <Button type="button" variant="outline" size="sm" onClick={handleDiscardAndSwitch}>
+                No
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action asChild>
+              <Button type="button" size="sm" onClick={handleSaveAndSwitch}>
+                Yes
+              </Button>
+            </AlertDialog.Action>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
   )
 }
 

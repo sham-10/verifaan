@@ -16,6 +16,7 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@prisma/client": "^6.19.3",
+    "css-selector-generator": "^3.9.4",
     "dotenv": "^16.6.1",
     "fastify": "^5.12.3",
     "playwright": "^1.63.0"

@@ -15,6 +15,8 @@ Technical reference mirrors: see /docs.
   before writing implementation code.
 - Explain any pattern or library usage I have not seen before, briefly, in
   the same message as the code.
+- After every new implementation, briefly explain, at a high level, what
+  you did and what the code does.
 - Do not add dependencies without asking first.
 - Do not change the Prisma schema without flagging it, it must stay in sync
   with docs/schema.md and the Confluence Domain Model page.
